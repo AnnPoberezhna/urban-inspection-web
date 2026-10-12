@@ -5,16 +5,24 @@ from pathlib import Path
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from PIL import Image as PILImage
 from PIL import UnidentifiedImageError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
+from app.analysis import analyze_image
 from app.config import settings
 from app.database import get_db
 from app.exif import read_gps
-from app.models import Image, Inspection
-from app.schemas import InspectionCreated
+from app.models import Damage, Image, Inspection, InspectionStatus
+from app.schemas import (
+    AnalysisSummary,
+    DamageResult,
+    ImageResult,
+    InspectionCreated,
+    InspectionResults,
+    MeasurementOut,
+)
 
 router = APIRouter(prefix="/inspections", tags=["inspections"])
 
@@ -89,3 +97,92 @@ def create_inspection(
 
     db.refresh(inspection)
     return inspection
+
+
+def _get_inspection(db: Session, inspection_id: int) -> Inspection:
+    inspection = db.get(
+        Inspection,
+        inspection_id,
+        options=[
+            selectinload(Inspection.images)
+            .selectinload(Image.damages)
+            .selectinload(Damage.measurements)
+        ],
+    )
+    if inspection is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Inspection {inspection_id} not found")
+    return inspection
+
+
+@router.post("/{inspection_id}/analyze", response_model=AnalysisSummary)
+def analyze_inspection(inspection_id: int, db: Session = Depends(get_db)):
+    """Run crack detection and measurement on every image. Re-running replaces previous results."""
+    inspection = _get_inspection(db, inspection_id)
+    if inspection.status == InspectionStatus.processing:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Analysis is already running")
+
+    inspection.status = InspectionStatus.processing
+    for image in inspection.images:
+        image.damages.clear()
+    db.commit()
+
+    damages_found = 0
+    try:
+        for image in inspection.images:
+            damage = analyze_image(image)
+            if damage is not None:
+                image.damages.append(damage)
+                damages_found += 1
+        inspection.status = InspectionStatus.completed
+        db.commit()
+    except Exception as error:
+        db.rollback()
+        inspection.status = InspectionStatus.failed
+        db.commit()
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, f"Analysis failed: {error}"
+        ) from error
+
+    return AnalysisSummary(
+        id=inspection.id,
+        status=inspection.status,
+        images_analyzed=len(inspection.images),
+        damages_found=damages_found,
+    )
+
+
+@router.get("/{inspection_id}/results", response_model=InspectionResults)
+def get_results(inspection_id: int, request: Request, db: Session = Depends(get_db)):
+    inspection = _get_inspection(db, inspection_id)
+
+    def file_url(relative_path: str) -> str:
+        return str(request.url_for("files", path=relative_path))
+
+    return InspectionResults(
+        id=inspection.id,
+        object_name=inspection.object_name,
+        inspection_date=inspection.inspection_date,
+        status=inspection.status,
+        images=[
+            ImageResult(
+                id=image.id,
+                latitude=image.latitude,
+                longitude=image.longitude,
+                original_url=file_url(image.file_path),
+                damages=[
+                    DamageResult(
+                        id=damage.id,
+                        confidence=damage.confidence,
+                        mask_url=file_url(damage.mask_path),
+                        overlay_url=file_url(damage.overlay_path),
+                        measurements=[
+                            MeasurementOut.model_validate(measurement)
+                            for measurement in damage.measurements
+                        ],
+                    )
+                    for damage in image.damages
+                ],
+            )
+            for image in inspection.images
+        ],
+    )
