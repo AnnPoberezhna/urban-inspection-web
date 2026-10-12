@@ -4,3 +4,5 @@ sqlalchemy>=2.0
 psycopg[binary]
 pydantic-settings
 opencv-python-headless
+python-multipart
+pillow
