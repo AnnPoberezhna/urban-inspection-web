@@ -35,7 +35,7 @@ def create_inspection(
     """Upload images with metadata. Form GPS applies to all images; otherwise GPS is read from EXIF."""
     if (latitude is None) != (longitude is None):
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             "Provide both latitude and longitude, or neither",
         )
 
