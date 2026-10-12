@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
@@ -14,12 +16,21 @@ from app.routers import inspections
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
-    settings.upload_dir.mkdir(parents=True, exist_ok=True)
     yield
 
 
 app = FastAPI(title="Urban Inspection API", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.frontend_url],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(inspections.router)
+
+# StaticFiles requires the directory to exist when it is mounted.
+settings.upload_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/files", StaticFiles(directory=settings.upload_dir), name="files")
 
 
 def _mark_binary_fields(node):

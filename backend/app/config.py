@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://urban:urban@localhost:5433/urban_inspection"
     upload_dir: Path = Path("uploads")
+    frontend_url: str = "http://localhost:5173"
 
 
 settings = Settings()
