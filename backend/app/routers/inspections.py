@@ -40,7 +40,7 @@ def create_inspection(
     scale_mm_per_px: Annotated[float | None, Form(gt=0)] = None,
     db: Session = Depends(get_db),
 ):
-    """Upload images with metadata. Form GPS applies to all images; otherwise GPS is read from EXIF."""
+    """Upload images with metadata. GPS is read from each image's EXIF; form GPS is the fallback."""
     if (latitude is None) != (longitude is None):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -74,10 +74,10 @@ def create_inspection(
             filename = f"{uuid4().hex}{extension}"
             (target_dir / filename).write_bytes(data)
 
-            if latitude is not None:
-                image_latitude, image_longitude = latitude, longitude
-            else:
+            if exif_latitude is not None:
                 image_latitude, image_longitude = exif_latitude, exif_longitude
+            else:
+                image_latitude, image_longitude = latitude, longitude
 
             inspection.images.append(
                 Image(
