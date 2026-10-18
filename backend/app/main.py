@@ -1,5 +1,3 @@
-from contextlib import asynccontextmanager
-
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
@@ -7,19 +5,12 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
-from app import models  # noqa: F401  (registers tables on Base.metadata)
 from app.config import settings
-from app.database import Base, engine, get_db
+from app.database import engine, get_db
 from app.routers import inspections
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    yield
-
-
-app = FastAPI(title="Urban Inspection API", lifespan=lifespan)
+# The schema is managed by Alembic migrations (alembic upgrade head), not created at startup.
+app = FastAPI(title="Urban Inspection API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_url],
