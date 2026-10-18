@@ -1,5 +1,6 @@
 from logging.config import fileConfig
 
+from geoalchemy2 import alembic_helpers
 from sqlalchemy import create_engine, pool
 
 from alembic import context
@@ -14,6 +15,13 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+# Teaches autogenerate about PostGIS types and spatial indexes, and skips PostGIS's own tables.
+POSTGIS_OPTIONS = {
+    "include_object": alembic_helpers.include_object,
+    "process_revision_directives": alembic_helpers.writer,
+    "render_item": alembic_helpers.render_item,
+}
+
 
 def run_migrations_offline() -> None:
     """Emit the SQL to stdout instead of running it (alembic upgrade --sql)."""
@@ -22,6 +30,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        **POSTGIS_OPTIONS,
     )
 
     with context.begin_transaction():
@@ -32,7 +41,9 @@ def run_migrations_online() -> None:
     connectable = create_engine(settings.database_url, poolclass=pool.NullPool)
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection, target_metadata=target_metadata, **POSTGIS_OPTIONS
+        )
 
         with context.begin_transaction():
             context.run_migrations()
