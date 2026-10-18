@@ -1,7 +1,8 @@
 import enum
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum, Float, ForeignKey, String, func
+from geoalchemy2 import Geography, WKBElement
+from sqlalchemy import Computed, Date, DateTime, Enum, Float, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -41,6 +42,11 @@ class Image(Base):
     file_path: Mapped[str] = mapped_column(String(1024))
     latitude: Mapped[float | None] = mapped_column(Float)
     longitude: Mapped[float | None] = mapped_column(Float)
+    # Derived by the database from latitude/longitude; set those instead. Geography measures distances in metres.
+    location: Mapped[WKBElement | None] = mapped_column(
+        Geography("POINT", srid=4326),
+        Computed("ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography", persisted=True),
+    )
     flight_altitude_m: Mapped[float | None] = mapped_column(Float)
     scale_mm_per_px: Mapped[float | None] = mapped_column(Float)
 
