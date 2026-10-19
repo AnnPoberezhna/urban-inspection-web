@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import CityScene from './CityScene.jsx'
+import InspectionMap from './InspectionMap.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
@@ -262,6 +263,8 @@ function App() {
           </div>
         )}
       </form>
+
+      <InspectionMap />
 
       <div ref={reportRef} className="report-anchor">
         {results && <Report inspectionId={inspectionId} results={results} />}
