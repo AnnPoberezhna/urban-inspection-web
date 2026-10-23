@@ -5,7 +5,7 @@ import numpy as np
 
 from app.config import settings
 from app.measurement import measure
-from app.models import Damage, Image, Measurement
+from app.models import AnalysisRun, Damage, Image, Measurement
 from app.segmentation import segment
 
 OVERLAY_COLOR = (0, 0, 255)  # BGR
@@ -23,7 +23,7 @@ def _write(relative_path: str, picture: np.ndarray) -> None:
         raise OSError(f"Cannot write {relative_path}")
 
 
-def analyze_image(image: Image) -> Damage | None:
+def analyze_image(image: Image, run: AnalysisRun) -> Damage | None:
     """Segment one image, save its mask and overlay, and measure the crack. None if nothing was found."""
     picture = cv2.imread(str(settings.upload_dir / image.file_path), cv2.IMREAD_COLOR)
     if picture is None:
@@ -33,17 +33,24 @@ def analyze_image(image: Image) -> Damage | None:
     if not result.mask.any():
         return None
 
+    # The run id in the name keeps earlier runs' files when the inspection is analyzed again.
     stem = PurePosixPath(image.file_path).with_suffix("")
-    mask_path = f"{stem}_mask.png"
-    overlay_path = f"{stem}_overlay.jpg"
+    mask_path = f"{stem}_run{run.id}_mask.png"
+    overlay_path = f"{stem}_run{run.id}_overlay.jpg"
     _write(mask_path, result.mask)
     _write(overlay_path, _overlay(picture, result.mask))
 
+    bbox_x, bbox_y, bbox_w, bbox_h = cv2.boundingRect(result.mask)
     size = measure(result.mask, image.scale_mm_per_px)
     return Damage(
+        analysis_run=run,
         mask_path=mask_path,
         overlay_path=overlay_path,
         confidence=result.confidence,
+        bbox_x=bbox_x,
+        bbox_y=bbox_y,
+        bbox_w=bbox_w,
+        bbox_h=bbox_h,
         measurements=[
             Measurement(
                 length_px=size.length_px,
