@@ -8,3 +8,6 @@ pydantic-settings
 opencv-contrib-python-headless
 python-multipart
 pillow
+pyjwt
+pwdlib[argon2]
+email-validator
