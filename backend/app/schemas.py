@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.models import InspectionStatus
+from app.models import InspectionStatus, WorkspaceRole
 
 
 class UserCreate(BaseModel):
@@ -21,6 +21,35 @@ class UserOut(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class WorkspaceCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+
+
+class WorkspaceOut(BaseModel):
+    id: int
+    name: str
+    is_personal: bool
+    role: WorkspaceRole
+
+
+class MemberAdd(BaseModel):
+    email: EmailStr
+
+
+class MemberOut(BaseModel):
+    user_id: int
+    email: str
+    role: WorkspaceRole
+    added_at: datetime
+
+
+class SiteOut(BaseModel):
+    id: int
+    name: str
+    latitude: float | None
+    longitude: float | None
 
 
 class ImageOut(BaseModel):
