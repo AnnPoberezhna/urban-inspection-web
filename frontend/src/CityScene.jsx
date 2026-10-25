@@ -119,7 +119,7 @@ function Tile({ tile, roomy }) {
   )
 }
 
-function Drone() {
+export function Drone() {
   return (
     <svg className="uav-craft" viewBox="0 0 120 60" aria-hidden="true">
       <ellipse className="rotor" cx="22" cy="9" rx="19" ry="2.4" />
