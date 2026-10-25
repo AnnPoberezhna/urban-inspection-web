@@ -1033,6 +1033,24 @@ body {
   }
 }
 
+/* Next steps over the map, where the page lands after an upload; above Leaflet's controls (z-index 1000). */
+.map-card {
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  z-index: 1001;
+  display: grid;
+  gap: 14px;
+  width: min(420px, calc(100% - 32px));
+  padding: 18px 20px;
+  translate: -50% 0;
+  border: 1px solid rgba(255, 174, 61, 0.28);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.9);
+  animation: rise 0.7s var(--ease-out) 0.3s both;
+}
+
 /* ---------- Inspections page: the drone operator's flight log ---------- */
 
 .desk {

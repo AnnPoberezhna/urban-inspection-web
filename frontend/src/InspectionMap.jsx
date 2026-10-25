@@ -59,7 +59,7 @@ function FlyToPin({ pin, onLand }) {
   return null
 }
 
-export default function InspectionMap({ ref, pin }) {
+export default function InspectionMap({ ref, pin, children }) {
   const [landedId, setLandedId] = useState(null)
 
   return (
@@ -83,6 +83,7 @@ export default function InspectionMap({ ref, pin }) {
           </Marker>
         )}
       </MapContainer>
+      {children}
     </section>
   )
 }

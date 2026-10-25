@@ -12,7 +12,7 @@ const AUTH_PAGES = { '/login': 'login', '/register': 'register' }
 const INSPECTIONS_PATH = '/inspections'
 
 /** The logged-in part of the app. Owns the workspace list, so both pages share the selected workspace. */
-function Session({ path, setPhase }) {
+function Session({ path, uploadKey, setPhase }) {
   const [workspaces, setWorkspaces] = useState([])
   const [workspaceId, setWorkspaceId] = useState('')
   const [workspacesError, setWorkspacesError] = useState('')
@@ -40,7 +40,8 @@ function Session({ path, setPhase }) {
   if (path === INSPECTIONS_PATH) {
     return <InspectionsPage {...shared} onWorkspaceCreated={handleWorkspaceCreated} />
   }
-  return <UploadPage {...shared} setPhase={setPhase} />
+  // Keyed, so that the topbar's "New inspection" link can start over from a clean page.
+  return <UploadPage key={uploadKey} {...shared} setPhase={setPhase} />
 }
 
 function App() {
@@ -49,6 +50,7 @@ function App() {
   const [user, setUser] = useState(() => (hasToken() ? undefined : null))
   const [notice, setNotice] = useState('')
   const [phase, setPhase] = useState('standby')
+  const [uploadKey, setUploadKey] = useState(0)
   const authMode = AUTH_PAGES[path]
 
   useEffect(() => {
@@ -96,6 +98,12 @@ function App() {
     return <AuthPage key={authMode} mode={authMode} notice={notice} onLoggedIn={handleLoggedIn} />
   }
 
+  // On the upload page itself the link would navigate nowhere; a new key resets the page instead.
+  function handleNewInspectionLink(event) {
+    followLink(event)
+    if (event.defaultPrevented) setUploadKey((key) => key + 1)
+  }
+
   const onInspections = path === INSPECTIONS_PATH
 
   return (
@@ -107,7 +115,7 @@ function App() {
         {user && (
           <>
             <nav className="nav" aria-label="Main">
-              <a href="/" onClick={followLink} aria-current={onInspections ? undefined : 'page'}>
+              <a href="/" onClick={handleNewInspectionLink} aria-current={onInspections ? undefined : 'page'}>
                 New inspection
               </a>
               <a href={INSPECTIONS_PATH} onClick={followLink} aria-current={onInspections ? 'page' : undefined}>
@@ -149,7 +157,7 @@ function App() {
       )}
 
       {/* Keyed by user, so logging out and in as someone else starts from a clean state. */}
-      {user && <Session key={user.id} path={path} setPhase={setPhase} />}
+      {user && <Session key={user.id} path={path} uploadKey={uploadKey} setPhase={setPhase} />}
     </div>
   )
 }

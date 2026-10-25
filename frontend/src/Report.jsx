@@ -10,7 +10,7 @@ function pad(value) {
   return String(value).padStart(4, '0')
 }
 
-export default function Report({ results, busy, analyzeError, onAnalyze }) {
+export default function Report({ results, busy, analyzeError, onAnalyze, onNewInspection }) {
   const damageCount = results.images.reduce((sum, image) => sum + image.damages.length, 0)
   const run = results.analysis_run
   return (
@@ -33,6 +33,11 @@ export default function Report({ results, busy, analyzeError, onAnalyze }) {
           >
             {busy ? 'Working...' : run ? 'Analyze again' : 'Analyze'}
           </button>
+          {onNewInspection && (
+            <button type="button" className="btn btn-ghost" onClick={onNewInspection} disabled={busy}>
+              New inspection
+            </button>
+          )}
           {analyzeError && <p className="ticker is-error">{analyzeError}</p>}
         </div>
         <dl className="report-facts">

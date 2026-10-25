@@ -29,6 +29,20 @@ async function locateInspection(inspection, sites) {
   return position && { position, byName: true }
 }
 
+/** What to do once an inspection is uploaded; shown in the details card and over the map. */
+function NextSteps({ analyzed, busy, onAnalyze, onNewInspection }) {
+  return (
+    <div className="actions">
+      <button type="button" className="btn btn-primary" onClick={onAnalyze} disabled={busy}>
+        {analyzed ? 'Analyze again' : 'Analyze'}
+      </button>
+      <button type="button" className="btn btn-ghost" onClick={onNewInspection} disabled={busy}>
+        New inspection
+      </button>
+    </div>
+  )
+}
+
 export default function UploadPage({ workspaces, workspaceId, workspacesError, onWorkspaceChange, setPhase }) {
   const [files, setFiles] = useState([])
   const [sites, setSites] = useState([])
@@ -41,6 +55,7 @@ export default function UploadPage({ workspaces, workspaceId, workspacesError, o
   const [isError, setIsError] = useState(false)
   const [analyzeError, setAnalyzeError] = useState('')
   const [pin, setPin] = useState(null)
+  const fileInputRef = useRef(null)
   const mapRef = useRef(null)
   const reportRef = useRef(null)
 
@@ -71,9 +86,27 @@ export default function UploadPage({ workspaces, workspaceId, workspacesError, o
     setIsError(error)
   }
 
+  // New photos start a new inspection; the previous one stays in the history.
   function handleFiles(selected) {
     setFiles(selected)
+    setInspectionId(null)
+    setResults(null)
+    setPin(null)
+    setAnalyzeError('')
+    showMessage('')
     setPhase(selected.length ? 'loaded' : 'standby')
+  }
+
+  function startNewInspection() {
+    // Cleared so that picking the same photos again still fires a change.
+    fileInputRef.current.value = ''
+    handleFiles([])
+  }
+
+  function handleNewInspection() {
+    startNewInspection()
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    fileInputRef.current.click()
   }
 
   async function handleUpload(event) {
@@ -128,12 +161,17 @@ export default function UploadPage({ workspaces, workspaceId, workspacesError, o
   }
 
   const count = files.length
+  const uploaded = inspectionId != null
+  let ctaLabel = 'Add photo for inspection'
+  if (uploaded) ctaLabel = 'Start a new inspection'
+  else if (count) ctaLabel = `${count} photo${count > 1 ? 's' : ''} selected — change`
 
   return (
     <>
       <form className="hero" onSubmit={handleUpload}>
         <Pitch>
           <input
+            ref={fileInputRef}
             id="photo-input"
             className="sr-only"
             type="file"
@@ -143,15 +181,20 @@ export default function UploadPage({ workspaces, workspaceId, workspacesError, o
             required
             onChange={(event) => handleFiles([...event.currentTarget.files])}
           />
-          <label htmlFor="photo-input" className="cta rise" style={{ '--d': '600ms' }}>
+          <label
+            htmlFor="photo-input"
+            className="cta rise"
+            style={{ '--d': '600ms' }}
+            onClick={uploaded ? startNewInspection : undefined}
+          >
             <CameraIcon />
-            {count ? `${count} photo${count > 1 ? 's' : ''} selected — change` : 'Add photo for inspection'}
+            {ctaLabel}
           </label>
         </Pitch>
 
         {count > 0 && (
           <div className="brief">
-            <p className="brief-title">Inspection details</p>
+            <p className="brief-title">{uploaded ? `Inspection #${inspectionId} uploaded` : 'Inspection details'}</p>
             <ul className="manifest">
               {files.slice(0, 4).map((file) => (
                 <li key={`${file.name}:${file.size}`}>{file.name}</li>
@@ -159,66 +202,75 @@ export default function UploadPage({ workspaces, workspaceId, workspacesError, o
               {count > 4 && <li>+{count - 4} more</li>}
             </ul>
 
-            <label className="field field-wide">
-              <span>Workspace</span>
-              <select
-                name="workspace_id"
-                value={workspaceId}
-                onChange={(event) => onWorkspaceChange(event.currentTarget.value)}
-                required
-              >
-                {workspaces.map((workspace) => (
-                  <option key={workspace.id} value={workspace.id}>
-                    {workspace.is_personal ? 'Personal (only you)' : workspace.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field field-wide">
-              <span>Site</span>
-              <input
-                type="text"
-                name="site_name"
-                list="site-options"
-                maxLength={255}
-                placeholder="Bridge pier 4, north face"
-                autoComplete="off"
-                required
+            {uploaded ? (
+              <NextSteps
+                analyzed={results != null}
+                busy={busy}
+                onAnalyze={handleAnalyze}
+                onNewInspection={handleNewInspection}
               />
-              <datalist id="site-options">
-                {sites.map((site) => (
-                  <option key={site.id} value={site.name} />
-                ))}
-              </datalist>
-            </label>
-            <label className="field">
-              <span>Date</span>
-              <input type="date" name="inspection_date" defaultValue={TODAY} required />
-            </label>
-            <label className="field">
-              <span>Scale, mm/px</span>
-              <input type="number" name="scale_mm_per_px" step="any" min="0" placeholder="optional" />
-            </label>
-            <label className="field">
-              <span>Latitude</span>
-              <input type="number" name="latitude" step="any" min="-90" max="90" placeholder="from EXIF" />
-            </label>
-            <label className="field">
-              <span>Longitude</span>
-              <input type="number" name="longitude" step="any" min="-180" max="180" placeholder="from EXIF" />
-            </label>
-            <p className="hint">
-              Pick an existing site or type a new one. Leave coordinates empty to read them from the image EXIF data.
-            </p>
+            ) : (
+              <>
+                <label className="field field-wide">
+                  <span>Workspace</span>
+                  <select
+                    name="workspace_id"
+                    value={workspaceId}
+                    onChange={(event) => onWorkspaceChange(event.currentTarget.value)}
+                    required
+                  >
+                    {workspaces.map((workspace) => (
+                      <option key={workspace.id} value={workspace.id}>
+                        {workspace.is_personal ? 'Personal (only you)' : workspace.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field field-wide">
+                  <span>Site</span>
+                  <input
+                    type="text"
+                    name="site_name"
+                    list="site-options"
+                    maxLength={255}
+                    placeholder="Bridge pier 4, north face"
+                    autoComplete="off"
+                    required
+                  />
+                  <datalist id="site-options">
+                    {sites.map((site) => (
+                      <option key={site.id} value={site.name} />
+                    ))}
+                  </datalist>
+                </label>
+                <label className="field">
+                  <span>Date</span>
+                  <input type="date" name="inspection_date" defaultValue={TODAY} required />
+                </label>
+                <label className="field">
+                  <span>Scale, mm/px</span>
+                  <input type="number" name="scale_mm_per_px" step="any" min="0" placeholder="optional" />
+                </label>
+                <label className="field">
+                  <span>Latitude</span>
+                  <input type="number" name="latitude" step="any" min="-90" max="90" placeholder="from EXIF" />
+                </label>
+                <label className="field">
+                  <span>Longitude</span>
+                  <input type="number" name="longitude" step="any" min="-180" max="180" placeholder="from EXIF" />
+                </label>
+                <p className="hint">
+                  Pick an existing site or type a new one. Leave coordinates empty to read them from the image EXIF
+                  data.
+                </p>
 
-            <div className="actions">
-              <button type="submit" className="btn btn-primary" disabled={busy}>
-                Upload
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={handleAnalyze} disabled={busy || inspectionId == null}>
-                Analyze
-              </button>
-            </div>
+                <div className="actions">
+                  <button type="submit" className="btn btn-primary" disabled={busy}>
+                    Upload
+                  </button>
+                </div>
+              </>
+            )}
 
             {workspacesError && <p className="ticker is-error">{workspacesError}</p>}
             {message && <p className={`ticker ${isError ? 'is-error' : ''}`}>{message}</p>}
@@ -226,11 +278,29 @@ export default function UploadPage({ workspaces, workspaceId, workspacesError, o
         )}
       </form>
 
-      <InspectionMap ref={mapRef} pin={pin} />
+      <InspectionMap ref={mapRef} pin={pin}>
+        {uploaded && (
+          <div className="map-card">
+            <p className="brief-title">Inspection #{inspectionId} uploaded</p>
+            <NextSteps
+              analyzed={results != null}
+              busy={busy}
+              onAnalyze={handleAnalyze}
+              onNewInspection={handleNewInspection}
+            />
+          </div>
+        )}
+      </InspectionMap>
 
       <div ref={reportRef} className="report-anchor">
         {results && (
-          <Report results={results} busy={busy} analyzeError={analyzeError} onAnalyze={handleAnalyze} />
+          <Report
+            results={results}
+            busy={busy}
+            analyzeError={analyzeError}
+            onAnalyze={handleAnalyze}
+            onNewInspection={handleNewInspection}
+          />
         )}
       </div>
     </>
