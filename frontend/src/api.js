@@ -62,6 +62,13 @@ export async function request(path, options = {}) {
   return body
 }
 
+/** Run a new analysis of the inspection, then fetch the results it produced. */
+export async function analyzeInspection(id) {
+  const summary = await request(`/inspections/${id}/analyze`, { method: 'POST' })
+  const results = await request(`/inspections/${id}/results`)
+  return { summary, results }
+}
+
 export function postJson(path, data) {
   return request(path, {
     method: 'POST',
