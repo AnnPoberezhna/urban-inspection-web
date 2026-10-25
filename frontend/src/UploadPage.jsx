@@ -9,6 +9,26 @@ const TODAY = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
   .map((part) => String(part).padStart(2, '0'))
   .join('-')
 
+async function geocode(query) {
+  const params = new URLSearchParams({ q: query, format: 'jsonv2', limit: '1' })
+  const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+    signal: AbortSignal.timeout(5000),
+  })
+  if (!response.ok) return null
+  const [place] = await response.json()
+  return place ? [Number(place.lat), Number(place.lon)] : null
+}
+
+// Pin the upload at its first geotagged image, else at the site's saved location, else look the site name up on OpenStreetMap.
+async function locateInspection(inspection, sites) {
+  const image = inspection.images.find((candidate) => candidate.latitude != null)
+  if (image) return { position: [image.latitude, image.longitude], byName: false }
+  const site = sites.find((candidate) => candidate.id === inspection.site_id && candidate.latitude != null)
+  if (site) return { position: [site.latitude, site.longitude], byName: false }
+  const position = await geocode(inspection.site_name).catch(() => null)
+  return position && { position, byName: true }
+}
+
 export default function UploadPage({ workspaces, workspaceId, workspacesError, onWorkspaceChange, setPhase }) {
   const [files, setFiles] = useState([])
   const [sites, setSites] = useState([])
@@ -20,6 +40,8 @@ export default function UploadPage({ workspaces, workspaceId, workspacesError, o
   const [message, setMessage] = useState('')
   const [isError, setIsError] = useState(false)
   const [analyzeError, setAnalyzeError] = useState('')
+  const [pin, setPin] = useState(null)
+  const mapRef = useRef(null)
   const reportRef = useRef(null)
 
   // Leaving the page puts the city scene back at rest.
@@ -35,6 +57,10 @@ export default function UploadPage({ workspaces, workspaceId, workspacesError, o
       active = false
     }
   }, [workspaceId, sitesKey])
+
+  useEffect(() => {
+    if (pin) mapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [pin])
 
   useEffect(() => {
     if (results) reportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -59,14 +85,20 @@ export default function UploadPage({ workspaces, workspaceId, workspacesError, o
 
     setBusy(true)
     setResults(null)
+    setPin(null)
     setPhase('uploading')
     showMessage('Uploading...')
     try {
       const inspection = await request('/inspections', { method: 'POST', body: form })
+      const place = await locateInspection(inspection, sites)
       setInspectionId(inspection.id)
       setSitesKey((key) => key + 1)
       setPhase('uploaded')
-      showMessage(`Uploaded. Inspection #${inspection.id} at ${inspection.site_name}, images: ${inspection.images.length}.`)
+      showMessage(
+        `Uploaded. Inspection #${inspection.id} at ${inspection.site_name}, images: ${inspection.images.length}.` +
+          (place ? '' : ' No location to show on the map.'),
+      )
+      if (place) setPin({ id: inspection.id, name: inspection.site_name, ...place })
     } catch (error) {
       setInspectionId(null)
       setPhase('error')
@@ -194,7 +226,7 @@ export default function UploadPage({ workspaces, workspaceId, workspacesError, o
         )}
       </form>
 
-      <InspectionMap />
+      <InspectionMap ref={mapRef} pin={pin} />
 
       <div ref={reportRef} className="report-anchor">
         {results && (
