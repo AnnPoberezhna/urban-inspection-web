@@ -3,6 +3,9 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+# Saved on every analysis run; change it whenever the model or its weights change.
+MODEL_VERSION = "mock-unet-0.1"
+
 
 @dataclass
 class SegmentationResult:

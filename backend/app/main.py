@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import engine, get_db
-from app.routers import inspections
+from app.routers import auth, inspections, workspaces
 
 # The schema is managed by Alembic migrations (alembic upgrade head), not created at startup.
 app = FastAPI(title="Urban Inspection API")
@@ -17,6 +17,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(auth.router)
+app.include_router(workspaces.router)
 app.include_router(inspections.router)
 
 # StaticFiles requires the directory to exist when it is mounted.
