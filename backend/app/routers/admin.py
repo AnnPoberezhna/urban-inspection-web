@@ -1,17 +1,27 @@
 import shutil
 from dataclasses import dataclass
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import Row, Select, delete, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
 from app.database import get_db
 from app.models import Inspection, Site, User, Workspace, WorkspaceMember, WorkspaceRole
-from app.schemas import AdminUserOut, KeptWorkspace, UserDeletionPreview
+from app.routers.inspections import get_any_inspection, results_out, summaries_visible_to
+from app.routers.workspaces import workspaces_of
+from app.schemas import (
+    AdminUserOut,
+    InspectionResults,
+    InspectionSummary,
+    KeptWorkspace,
+    UserDeletionPreview,
+    WorkspaceOut,
+)
 from app.security import require_admin
 
-# Accounts only: admins see usage counts, never the contents of other people's workspaces.
+# Admins can delete accounts, and look at everything else read-only, to help users with problems.
+# Apart from deleting an account, every endpoint here only reads.
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
 
@@ -44,10 +54,15 @@ def _admin_user_out(row: Row[tuple[User, int, int]]) -> AdminUserOut:
     )
 
 
-def _get_deletable_user(db: Session, user_id: int) -> User:
+def _get_user(db: Session, user_id: int) -> User:
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"User {user_id} not found")
+    return user
+
+
+def _get_deletable_user(db: Session, user_id: int) -> User:
+    user = _get_user(db, user_id)
     if user.is_admin:
         # This also stops admins from deleting themselves.
         raise HTTPException(
@@ -104,6 +119,36 @@ def list_users(db: Session = Depends(get_db)):
     """All accounts with their usage, oldest first."""
     rows = db.execute(_users_with_usage().order_by(User.created_at, User.id))
     return [_admin_user_out(row) for row in rows]
+
+
+@router.get("/users/{user_id}", response_model=AdminUserOut)
+def get_user(user_id: int, db: Session = Depends(get_db)):
+    row = db.execute(_users_with_usage().where(User.id == user_id)).one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"User {user_id} not found")
+    return _admin_user_out(row)
+
+
+@router.get("/users/{user_id}/workspaces", response_model=list[WorkspaceOut])
+def list_user_workspaces(user_id: int, db: Session = Depends(get_db)):
+    """The user's workspaces, as their History page lists them."""
+    return workspaces_of(db, _get_user(db, user_id))
+
+
+@router.get("/users/{user_id}/inspections", response_model=list[InspectionSummary])
+def list_user_inspections(
+    user_id: int, workspace_id: int | None = None, db: Session = Depends(get_db)
+):
+    """The inspections the user can see, as their History page lists them. Pass workspace_id for one workspace."""
+    return summaries_visible_to(db, _get_user(db, user_id), workspace_id)
+
+
+@router.get("/inspections/{inspection_id}/results", response_model=InspectionResults)
+def get_inspection_results(
+    inspection_id: int, request: Request, db: Session = Depends(get_db)
+):
+    """Any inspection's results, as its users see them. There is no admin way to analyze or change it."""
+    return results_out(get_any_inspection(db, inspection_id), request)
 
 
 @router.get("/users/{user_id}/deletion-preview", response_model=UserDeletionPreview)

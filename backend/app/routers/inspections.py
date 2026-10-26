@@ -175,13 +175,10 @@ def create_inspection(
     )
 
 
-@router.get("", response_model=list[InspectionSummary])
-def list_inspections(
-    workspace_id: int | None = None,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Inspections in all my workspaces, newest first. Pass workspace_id to see only one workspace."""
+def summaries_visible_to(
+    db: Session, user: User, workspace_id: int | None = None
+) -> list[InspectionSummary]:
+    """Inspections in all the user's workspaces, newest first; with workspace_id, only in that one."""
     query = (
         _visible_to(user)
         .options(selectinload(Inspection.site), selectinload(Inspection.created_by))
@@ -193,11 +190,21 @@ def list_inspections(
     return [_summary(inspection) for inspection in db.scalars(query)]
 
 
-def _get_inspection(db: Session, inspection_id: int, user: User) -> Inspection:
-    """Load an inspection from one of the user's workspaces. 404 otherwise, so other people's IDs stay hidden."""
+@router.get("", response_model=list[InspectionSummary])
+def list_inspections(
+    workspace_id: int | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Inspections in all my workspaces, newest first. Pass workspace_id to see only one workspace."""
+    return summaries_visible_to(db, user, workspace_id)
+
+
+def _load_inspection(
+    db: Session, query: Select[tuple[Inspection]], inspection_id: int
+) -> Inspection:
     inspection = db.scalar(
-        _visible_to(user)
-        .where(Inspection.id == inspection_id)
+        query.where(Inspection.id == inspection_id)
         .options(
             selectinload(Inspection.site),
             selectinload(Inspection.created_by),
@@ -210,6 +217,16 @@ def _get_inspection(db: Session, inspection_id: int, user: User) -> Inspection:
     if inspection is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Inspection {inspection_id} not found")
     return inspection
+
+
+def _get_inspection(db: Session, inspection_id: int, user: User) -> Inspection:
+    """Load an inspection from one of the user's workspaces. 404 otherwise, so other people's IDs stay hidden."""
+    return _load_inspection(db, _visible_to(user), inspection_id)
+
+
+def get_any_inspection(db: Session, inspection_id: int) -> Inspection:
+    """Load an inspection from any workspace. Only for the admin endpoints."""
+    return _load_inspection(db, select(Inspection), inspection_id)
 
 
 @router.post("/{inspection_id}/analyze", response_model=AnalysisSummary)
@@ -256,15 +273,8 @@ def analyze_inspection(
     )
 
 
-@router.get("/{inspection_id}/results", response_model=InspectionResults)
-def get_results(
-    inspection_id: int,
-    request: Request,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
+def results_out(inspection: Inspection, request: Request) -> InspectionResults:
     """The inspection with the damages found by its latest completed analysis run."""
-    inspection = _get_inspection(db, inspection_id, user)
     run = next(
         (run for run in reversed(inspection.analysis_runs) if run.status == RunStatus.completed),
         None,
@@ -305,3 +315,14 @@ def get_results(
             for image in inspection.images
         ],
     )
+
+
+@router.get("/{inspection_id}/results", response_model=InspectionResults)
+def get_results(
+    inspection_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """The inspection with the damages found by its latest completed analysis run."""
+    return results_out(_get_inspection(db, inspection_id, user), request)

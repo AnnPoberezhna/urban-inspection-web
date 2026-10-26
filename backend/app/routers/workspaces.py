@@ -18,9 +18,8 @@ def _member_out(member: WorkspaceMember) -> MemberOut:
     )
 
 
-@router.get("", response_model=list[WorkspaceOut])
-def list_workspaces(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Workspaces I belong to, with my role in each. The personal one comes first."""
+def workspaces_of(db: Session, user: User) -> list[WorkspaceOut]:
+    """Workspaces the user belongs to, with their role in each. The personal one comes first."""
     rows = db.execute(
         select(Workspace, WorkspaceMember.role)
         .join(WorkspaceMember)
@@ -31,6 +30,12 @@ def list_workspaces(user: User = Depends(get_current_user), db: Session = Depend
         WorkspaceOut(id=workspace.id, name=workspace.name, is_personal=workspace.is_personal, role=role)
         for workspace, role in rows
     ]
+
+
+@router.get("", response_model=list[WorkspaceOut])
+def list_workspaces(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Workspaces I belong to, with my role in each. The personal one comes first."""
+    return workspaces_of(db, user)
 
 
 @router.post("", response_model=WorkspaceOut, status_code=status.HTTP_201_CREATED)
