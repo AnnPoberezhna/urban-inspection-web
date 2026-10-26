@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import AdminPage from './AdminPage.jsx'
 import { clearToken, hasToken, request, setUnauthorizedHandler } from './api.js'
 import AuthPage from './AuthPage.jsx'
 import CityScene from './CityScene.jsx'
@@ -10,9 +11,12 @@ import UploadPage from './UploadPage.jsx'
 
 const AUTH_PAGES = { '/login': 'login', '/register': 'register' }
 const INSPECTIONS_PATH = '/inspections'
+const ADMIN_PATH = '/admin'
+// Pages that only make sense when logged in; logged-out visitors are sent to /login.
+const PRIVATE_PATHS = [INSPECTIONS_PATH, ADMIN_PATH]
 
 /** The logged-in part of the app. Owns the workspace list, so both pages share the selected workspace. */
-function Session({ path, uploadKey, setPhase }) {
+function Session({ user, path, uploadKey, setPhase }) {
   const [workspaces, setWorkspaces] = useState([])
   const [workspaceId, setWorkspaceId] = useState('')
   const [workspacesError, setWorkspacesError] = useState('')
@@ -35,6 +39,8 @@ function Session({ path, uploadKey, setPhase }) {
     setWorkspaces((list) => [...list, workspace])
     setWorkspaceId(String(workspace.id))
   }
+
+  if (path === ADMIN_PATH && user.is_admin) return <AdminPage currentUserId={user.id} />
 
   const shared = { workspaces, workspaceId, workspacesError, onWorkspaceChange: setWorkspaceId }
   if (path === INSPECTIONS_PATH) {
@@ -76,7 +82,8 @@ function App() {
   useEffect(() => {
     // Logged-in users have nothing to do on the auth pages; this also handles the redirect after login.
     if (authMode && user) navigate('/', { replace: true })
-    if (path === INSPECTIONS_PATH && user === null) navigate('/login', { replace: true })
+    if (PRIVATE_PATHS.includes(path) && user === null) navigate('/login', { replace: true })
+    if (path === ADMIN_PATH && user && !user.is_admin) navigate('/', { replace: true })
   }, [authMode, path, user])
 
   function handleLoggedIn(me) {
@@ -105,6 +112,7 @@ function App() {
   }
 
   const onInspections = path === INSPECTIONS_PATH
+  const onAdmin = path === ADMIN_PATH
 
   return (
     <div className="app" data-phase={phase}>
@@ -115,12 +123,21 @@ function App() {
         {user && (
           <>
             <nav className="nav" aria-label="Main">
-              <a href="/" onClick={handleNewInspectionLink} aria-current={onInspections ? undefined : 'page'}>
+              <a
+                href="/"
+                onClick={handleNewInspectionLink}
+                aria-current={onInspections || onAdmin ? undefined : 'page'}
+              >
                 New inspection
               </a>
               <a href={INSPECTIONS_PATH} onClick={followLink} aria-current={onInspections ? 'page' : undefined}>
                 History
               </a>
+              {user.is_admin && (
+                <a href={ADMIN_PATH} onClick={followLink} aria-current={onAdmin ? 'page' : undefined}>
+                  Admin
+                </a>
+              )}
             </nav>
             <div className="account">
               <span className="account-email">{user.email}</span>
@@ -142,7 +159,7 @@ function App() {
         )}
       </header>
 
-      {user === null && !onInspections && (
+      {user === null && !PRIVATE_PATHS.includes(path) && (
         <>
           <div className="hero">
             <Pitch>
@@ -157,7 +174,7 @@ function App() {
       )}
 
       {/* Keyed by user, so logging out and in as someone else starts from a clean state. */}
-      {user && <Session key={user.id} path={path} uploadKey={uploadKey} setPhase={setPhase} />}
+      {user && <Session key={user.id} user={user} path={path} uploadKey={uploadKey} setPhase={setPhase} />}
     </div>
   )
 }

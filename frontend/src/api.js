@@ -36,7 +36,7 @@ export function clearToken() {
   }
 }
 
-/** Called when the API rejects the stored token (expired, or edited by hand). */
+/** Called when the API rejects the stored token (expired, edited by hand, or the account was deleted). */
 export function setUnauthorizedHandler(handler) {
   onUnauthorized = handler
 }

@@ -19,7 +19,7 @@ export default function Report({ results, busy, analyzeError, onAnalyze, onNewIn
         <p className="kicker">Inspection report · #{results.id}</p>
         <h2>{results.site_name}</h2>
         <p className="report-byline">
-          Uploaded by {results.created_by}
+          Uploaded by {results.created_by ?? 'a deleted user'}
           {run
             ? ` · analyzed ${formatDateTime(run.finished_at ?? run.started_at)} with ${run.model_version}`
             : ' · not analyzed yet'}

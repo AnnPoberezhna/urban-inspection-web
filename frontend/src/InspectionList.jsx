@@ -44,7 +44,7 @@ export default function InspectionList({ inspections, openId, error, onOpen }) {
                   <span className="log-body">
                     <span className="log-site">{inspection.site_name}</span>
                     <span className="log-meta">
-                      {formatDate(inspection.inspection_date)} · {inspection.created_by}
+                      {formatDate(inspection.inspection_date)} · {inspection.created_by ?? 'deleted user'}
                     </span>
                   </span>
                   <span className="log-status">
