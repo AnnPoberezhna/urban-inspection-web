@@ -105,7 +105,8 @@ function NewWorkspaceForm({ onCreated }) {
   )
 }
 
-export default function WorkspacePanel({ workspaces, workspaceId, onSelect, onCreated }) {
+/** With readOnly, only the list to switch between workspaces, as admins see another user's. */
+export default function WorkspacePanel({ workspaces, workspaceId, onSelect, onCreated, readOnly = false }) {
   const selected = workspaces.find((workspace) => String(workspace.id) === workspaceId)
 
   return (
@@ -127,7 +128,9 @@ export default function WorkspacePanel({ workspaces, workspaceId, onSelect, onCr
                     CH-{String(index + 1).padStart(2, '0')}
                   </span>
                   <span className="channel-name">{workspace.is_personal ? 'Personal' : workspace.name}</span>
-                  <span className="channel-role">{workspace.is_personal ? 'only you' : workspace.role}</span>
+                  <span className="channel-role">
+                    {workspace.is_personal ? (readOnly ? 'personal' : 'only you') : workspace.role}
+                  </span>
                 </button>
               </li>
             )
@@ -135,13 +138,20 @@ export default function WorkspacePanel({ workspaces, workspaceId, onSelect, onCr
         </ul>
       </div>
 
-      {/* Keyed by workspace, so switching workspaces clears the member list and messages. */}
-      {selected && !selected.is_personal && <Members key={selected.id} workspace={selected} />}
-      {selected?.is_personal && (
-        <p className="rail-block rail-note">Only you can see the inspections in your personal workspace.</p>
-      )}
+      {!readOnly && (
+        <>
+          {/* Keyed by workspace, so switching workspaces clears the member list and messages. */}
+          {selected && !selected.is_personal && <Members key={selected.id} workspace={selected} />}
+          {selected?.is_personal && (
+            <p className="rail-block rail-note">
+              Only you can see the inspections in your personal workspace. Admins can view them, read-only, to
+              help with problems.
+            </p>
+          )}
 
-      <NewWorkspaceForm onCreated={onCreated} />
+          <NewWorkspaceForm onCreated={onCreated} />
+        </>
+      )}
     </aside>
   )
 }

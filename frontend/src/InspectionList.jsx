@@ -10,7 +10,7 @@ function formatDate(value) {
   })
 }
 
-export default function InspectionList({ inspections, openId, error, onOpen }) {
+export default function InspectionList({ inspections, openId, error, onOpen, readOnly = false }) {
   return (
     <section className="log" aria-label="Inspections">
       {error && <p className="ticker is-error">{error}</p>}
@@ -20,9 +20,11 @@ export default function InspectionList({ inspections, openId, error, onOpen }) {
       {inspections?.length === 0 && (
         <div className="log-empty rise">
           <p>Nothing logged in this workspace yet.</p>
-          <a href="/" className="btn btn-ghost" onClick={followLink}>
-            New inspection
-          </a>
+          {!readOnly && (
+            <a href="/" className="btn btn-ghost" onClick={followLink}>
+              New inspection
+            </a>
+          )}
         </div>
       )}
 

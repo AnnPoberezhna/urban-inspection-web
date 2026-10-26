@@ -24,22 +24,25 @@ export default function Report({ results, busy, analyzeError, onAnalyze, onNewIn
             ? ` · analyzed ${formatDateTime(run.finished_at ?? run.started_at)} with ${run.model_version}`
             : ' · not analyzed yet'}
         </p>
-        <div className="report-actions">
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={onAnalyze}
-            disabled={busy || results.status === 'processing'}
-          >
-            {busy ? 'Working...' : run ? 'Analyze again' : 'Analyze'}
-          </button>
-          {onNewInspection && (
-            <button type="button" className="btn btn-ghost" onClick={onNewInspection} disabled={busy}>
-              New inspection
+        {/* Without onAnalyze the report is read-only, as admins see it. */}
+        {onAnalyze && (
+          <div className="report-actions">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={onAnalyze}
+              disabled={busy || results.status === 'processing'}
+            >
+              {busy ? 'Working...' : run ? 'Analyze again' : 'Analyze'}
             </button>
-          )}
-          {analyzeError && <p className="ticker is-error">{analyzeError}</p>}
-        </div>
+            {onNewInspection && (
+              <button type="button" className="btn btn-ghost" onClick={onNewInspection} disabled={busy}>
+                New inspection
+              </button>
+            )}
+            {analyzeError && <p className="ticker is-error">{analyzeError}</p>}
+          </div>
+        )}
         <dl className="report-facts">
           <div>
             <dt>Date</dt>

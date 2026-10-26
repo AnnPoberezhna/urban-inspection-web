@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import AdminPage from './AdminPage.jsx'
+import AdminUserView from './AdminUserView.jsx'
 import { clearToken, hasToken, request, setUnauthorizedHandler } from './api.js'
 import AuthPage from './AuthPage.jsx'
 import CityScene from './CityScene.jsx'
@@ -12,8 +13,17 @@ import UploadPage from './UploadPage.jsx'
 const AUTH_PAGES = { '/login': 'login', '/register': 'register' }
 const INSPECTIONS_PATH = '/inspections'
 const ADMIN_PATH = '/admin'
+// One user's inspections, read-only, e.g. /admin/users/12.
+const ADMIN_USER_PATH = /^\/admin\/users\/(\d+)$/
+
+function isAdminPath(path) {
+  return path === ADMIN_PATH || ADMIN_USER_PATH.test(path)
+}
+
 // Pages that only make sense when logged in; logged-out visitors are sent to /login.
-const PRIVATE_PATHS = [INSPECTIONS_PATH, ADMIN_PATH]
+function isPrivatePath(path) {
+  return path === INSPECTIONS_PATH || isAdminPath(path)
+}
 
 /** The logged-in part of the app. Owns the workspace list, so both pages share the selected workspace. */
 function Session({ user, path, uploadKey, setPhase }) {
@@ -40,7 +50,12 @@ function Session({ user, path, uploadKey, setPhase }) {
     setWorkspaceId(String(workspace.id))
   }
 
-  if (path === ADMIN_PATH && user.is_admin) return <AdminPage currentUserId={user.id} />
+  if (isAdminPath(path) && user.is_admin) {
+    const viewedId = path.match(ADMIN_USER_PATH)?.[1]
+    // Keyed, so opening another user starts from a clean page.
+    if (viewedId) return <AdminUserView key={viewedId} userId={Number(viewedId)} />
+    return <AdminPage currentUserId={user.id} />
+  }
 
   const shared = { workspaces, workspaceId, workspacesError, onWorkspaceChange: setWorkspaceId }
   if (path === INSPECTIONS_PATH) {
@@ -82,8 +97,8 @@ function App() {
   useEffect(() => {
     // Logged-in users have nothing to do on the auth pages; this also handles the redirect after login.
     if (authMode && user) navigate('/', { replace: true })
-    if (PRIVATE_PATHS.includes(path) && user === null) navigate('/login', { replace: true })
-    if (path === ADMIN_PATH && user && !user.is_admin) navigate('/', { replace: true })
+    if (isPrivatePath(path) && user === null) navigate('/login', { replace: true })
+    if (isAdminPath(path) && user && !user.is_admin) navigate('/', { replace: true })
   }, [authMode, path, user])
 
   function handleLoggedIn(me) {
@@ -112,7 +127,7 @@ function App() {
   }
 
   const onInspections = path === INSPECTIONS_PATH
-  const onAdmin = path === ADMIN_PATH
+  const onAdmin = isAdminPath(path)
 
   return (
     <div className="app" data-phase={phase}>
@@ -159,7 +174,7 @@ function App() {
         )}
       </header>
 
-      {user === null && !PRIVATE_PATHS.includes(path) && (
+      {user === null && !isPrivatePath(path) && (
         <>
           <div className="hero">
             <Pitch>

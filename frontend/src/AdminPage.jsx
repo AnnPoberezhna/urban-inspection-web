@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { request } from './api.js'
+import { followLink } from './router.js'
 
 const NOTICE_MS = 6000
 
@@ -262,6 +263,14 @@ export default function AdminPage({ currentUserId }) {
               </p>
 
               <div className="roster-action">
+                <a
+                  href={`/admin/users/${user.id}`}
+                  className="btn btn-ghost"
+                  onClick={followLink}
+                  aria-label={`View the inspections of ${user.email}`}
+                >
+                  View
+                </a>
                 {user.is_admin ? (
                   <span className="roster-note" title="Admins can't be deleted. Revoke admin rights first.">
                     Protected
