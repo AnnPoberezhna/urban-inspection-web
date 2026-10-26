@@ -14,7 +14,6 @@ from app.schemas import (
     AdminUserOut,
     InspectionResults,
     InspectionSummary,
-    KeptWorkspace,
     UserDeletionPreview,
     WorkspaceOut,
 )
@@ -77,8 +76,11 @@ def _get_deletable_user(db: Session, user_id: int) -> User:
 class _DeletionPlan:
     # The personal workspace, and team workspaces nobody else belongs to.
     deleted: list[Workspace]
-    # Team workspaces shared with others, each with the member who takes over as owner, if one must.
-    kept: list[tuple[Workspace, WorkspaceMember | None]]
+    # Team workspaces shared with others.
+    kept: list[Workspace]
+    # Kept workspaces the user is the only owner of. A workspace always keeps an owner, and the admin
+    # doesn't pick one for the team, so these block the delete until the user makes someone else an owner.
+    sole_owner_of: list[Workspace]
 
     def deleted_ids(self) -> list[int]:
         return [workspace.id for workspace in self.deleted]
@@ -89,28 +91,22 @@ def _plan_deletion(db: Session, user: User) -> _DeletionPlan:
         select(WorkspaceMember)
         .join(WorkspaceMember.workspace)
         .where(WorkspaceMember.user_id == user.id)
-        .options(
-            selectinload(WorkspaceMember.workspace)
-            .selectinload(Workspace.members)
-            .selectinload(WorkspaceMember.user)
-        )
+        .options(selectinload(WorkspaceMember.workspace).selectinload(Workspace.members))
         .order_by(Workspace.is_personal.desc(), Workspace.name)
     ).all()
 
-    plan = _DeletionPlan(deleted=[], kept=[])
+    plan = _DeletionPlan(deleted=[], kept=[], sole_owner_of=[])
     for membership in memberships:
         workspace = membership.workspace
         others = [member for member in workspace.members if member.user_id != user.id]
         if workspace.is_personal or not others:
             plan.deleted.append(workspace)
             continue
-        heir = None
+        plan.kept.append(workspace)
         if membership.role == WorkspaceRole.owner and all(
             member.role != WorkspaceRole.owner for member in others
         ):
-            # A workspace always keeps an owner, so the longest-standing member takes over.
-            heir = min(others, key=lambda member: (member.added_at, member.user_id))
-        plan.kept.append((workspace, heir))
+            plan.sole_owner_of.append(workspace)
     return plan
 
 
@@ -172,11 +168,9 @@ def preview_user_deletion(user_id: int, db: Session = Depends(get_db)):
     return UserDeletionPreview(
         deleted_workspaces=[workspace.name for workspace in plan.deleted],
         deleted_inspections=deleted_inspections,
-        kept_workspaces=[
-            KeptWorkspace(name=workspace.name, new_owner=heir.user.email if heir else None)
-            for workspace, heir in plan.kept
-        ],
+        kept_workspaces=[workspace.name for workspace in plan.kept],
         kept_inspections=kept_inspections,
+        sole_owner_of=[workspace.name for workspace in plan.sole_owner_of],
     )
 
 
@@ -185,18 +179,23 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     """Delete an account for good, with its personal workspace and the team workspaces only it belongs to.
 
     Team workspaces shared with others stay, with everything in them; what the user made there
-    keeps no author. Open sessions of the account stop working.
+    keeps no author. Not possible while the user is the only owner of such a workspace.
+    Open sessions of the account stop working.
     """
     user = _get_deletable_user(db, user_id)
     plan = _plan_deletion(db, user)
+    if plan.sole_owner_of:
+        names = ", ".join(workspace.name for workspace in plan.sole_owner_of)
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{user.email} is the only owner of {names}, which other people use. "
+            "They must make another member an owner first.",
+        )
     deleted_ids = plan.deleted_ids()
     inspection_ids = db.scalars(
         select(Inspection.id).join(Inspection.site).where(Site.workspace_id.in_(deleted_ids))
     ).all()
 
-    for _, heir in plan.kept:
-        if heir is not None:
-            heir.role = WorkspaceRole.owner
     # The database cascades this to the workspaces' members, sites, inspections, images and analyses,
     # and clears the author of whatever the user created in the workspaces that stay.
     db.execute(delete(Workspace).where(Workspace.id.in_(deleted_ids)))

@@ -6,7 +6,14 @@ from sqlalchemy.orm import Session, selectinload
 from app.access import get_membership, require_owner
 from app.database import get_db
 from app.models import Site, User, Workspace, WorkspaceMember, WorkspaceRole
-from app.schemas import MemberAdd, MemberOut, SiteOut, WorkspaceCreate, WorkspaceOut
+from app.schemas import (
+    MemberAdd,
+    MemberOut,
+    MemberRoleUpdate,
+    SiteOut,
+    WorkspaceCreate,
+    WorkspaceOut,
+)
 from app.security import get_current_user
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
@@ -15,6 +22,17 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 def _member_out(member: WorkspaceMember) -> MemberOut:
     return MemberOut(
         user_id=member.user_id, email=member.user.email, role=member.role, added_at=member.added_at
+    )
+
+
+def _owner_count(db: Session, workspace_id: int) -> int:
+    return db.scalar(
+        select(func.count())
+        .select_from(WorkspaceMember)
+        .where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.role == WorkspaceRole.owner,
+        )
     )
 
 
@@ -106,20 +124,37 @@ def remove_member(
     if member is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"User {user_id} is not a member")
 
-    if member.role == WorkspaceRole.owner:
-        owners = db.scalar(
-            select(func.count())
-            .select_from(WorkspaceMember)
-            .where(
-                WorkspaceMember.workspace_id == workspace_id,
-                WorkspaceMember.role == WorkspaceRole.owner,
-            )
-        )
-        if owners == 1:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot remove the last owner")
+    if member.role == WorkspaceRole.owner and _owner_count(db, workspace_id) == 1:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot remove the last owner")
 
     db.delete(member)
     db.commit()
+
+
+@router.patch("/{workspace_id}/members/{user_id}", response_model=MemberOut)
+def change_member_role(
+    workspace_id: int,
+    user_id: int,
+    body: MemberRoleUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Make a member an owner, or an owner a member. Owners only; a workspace always keeps at least one owner."""
+    require_owner(db, user, workspace_id)
+    member = db.get(WorkspaceMember, (workspace_id, user_id))
+    if member is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"User {user_id} is not a member")
+
+    if (
+        member.role == WorkspaceRole.owner
+        and body.role == WorkspaceRole.member
+        and _owner_count(db, workspace_id) == 1
+    ):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot remove the last owner")
+
+    member.role = body.role
+    db.commit()
+    return _member_out(member)
 
 
 @router.get("/{workspace_id}/sites", response_model=list[SiteOut])
