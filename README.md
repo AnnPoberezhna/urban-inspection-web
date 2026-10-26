@@ -31,6 +31,20 @@ Endpoints marked with a lock need a logged-in user. In Swagger UI at http://loca
 
 Swagger then sends the token with every request. `GET /auth/me` shows who you are logged in as.
 
+## Admin accounts
+
+Admins see every account with its usage (last login, workspaces, inspections) and can block or unblock accounts.
+A blocked user can't log in, and any session they have open stops working. Admins can't see the contents of other people's workspaces.
+
+Admin rights can only be granted from the command line, never through the website. Register the account in the app first, then run from `backend/`:
+
+```powershell
+python -m app.make_admin you@example.com            # grant admin rights
+python -m app.make_admin you@example.com --revoke   # remove them
+```
+
+Admins can't be blocked; revoke their admin rights first.
+
 ## Database migrations
 
 The schema is managed by [Alembic](https://alembic.sqlalchemy.org/); the app does not create tables on startup.

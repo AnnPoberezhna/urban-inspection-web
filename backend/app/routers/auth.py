@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,7 +10,13 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, Workspace, WorkspaceMember, WorkspaceRole
 from app.schemas import Token, UserCreate, UserOut
-from app.security import create_access_token, get_current_user, hash_password, verify_password
+from app.security import (
+    BLOCKED_MESSAGE,
+    create_access_token,
+    get_current_user,
+    hash_password,
+    verify_password,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -42,6 +49,12 @@ def login(
             "Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # Only after the password check, so the blocked status isn't revealed to someone guessing.
+    if user.blocked_at is not None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, BLOCKED_MESSAGE)
+
+    user.last_login_at = datetime.now(timezone.utc)
+    db.commit()
     return Token(access_token=create_access_token(user.id))
 
 

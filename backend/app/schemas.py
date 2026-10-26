@@ -16,11 +16,25 @@ class UserOut(BaseModel):
     id: int
     email: str
     created_at: datetime
+    is_admin: bool
 
 
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class AdminUserOut(BaseModel):
+    """An account as the admin page shows it, with usage counts."""
+
+    id: int
+    email: str
+    created_at: datetime
+    last_login_at: datetime | None
+    is_admin: bool
+    blocked_at: datetime | None
+    workspaces: int  # workspaces the user is a member of, including the personal one
+    inspections: int  # inspections the user uploaded
 
 
 class WorkspaceCreate(BaseModel):
