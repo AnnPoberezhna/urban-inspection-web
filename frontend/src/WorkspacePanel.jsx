@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { postJson, request } from './api.js'
+import { patchJson, postJson, request } from './api.js'
+import ConfirmDialog from './ConfirmDialog.jsx'
 
 function initials(email) {
   return email.slice(0, 2).toUpperCase()
@@ -9,6 +10,9 @@ function Members({ workspace }) {
   const [members, setMembers] = useState([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState(null)
+  // The member who is asked about in the "Make owner" dialog.
+  const [promoting, setPromoting] = useState(null)
+  const [promoteError, setPromoteError] = useState('')
   const isOwner = workspace.role === 'owner'
   const inputId = `add-member-${workspace.id}`
 
@@ -40,6 +44,28 @@ function Members({ workspace }) {
     }
   }
 
+  function openPromote(member) {
+    setMessage(null)
+    setPromoteError('')
+    setPromoting(member)
+  }
+
+  async function promote() {
+    setBusy(true)
+    setPromoteError('')
+    try {
+      const updated = await patchJson(`/workspaces/${workspace.id}/members/${promoting.user_id}`, { role: 'owner' })
+      setMembers((list) => list.map((item) => (item.user_id === updated.user_id ? updated : item)))
+      setPromoting(null)
+      setMessage({ text: `${updated.email} is now an owner of this workspace.`, isError: false })
+    } catch (failure) {
+      // The dialog stays open, so the owner can try again or cancel.
+      setPromoteError(`Cannot make ${promoting.email} an owner: ${failure.message}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="rail-block">
       <p className="rail-label">Members · {members.length}</p>
@@ -50,7 +76,19 @@ function Members({ workspace }) {
               {initials(member.email)}
             </span>
             <span className="crew-email">{member.email}</span>
-            <span className="crew-role">{member.role}</span>
+            {isOwner && member.role === 'member' ? (
+              <button
+                type="button"
+                className="crew-action"
+                aria-label={`Make ${member.email} an owner`}
+                aria-haspopup="dialog"
+                onClick={() => openPromote(member)}
+              >
+                Make owner
+              </button>
+            ) : (
+              <span className="crew-role">{member.role}</span>
+            )}
           </li>
         ))}
       </ul>
@@ -67,6 +105,21 @@ function Members({ workspace }) {
         </form>
       )}
       {message && <p className={`ticker ${message.isError ? 'is-error' : ''}`}>{message.text}</p>}
+
+      {promoting && (
+        <ConfirmDialog
+          tone="primary"
+          label="Make owner"
+          title={promoting.email}
+          description={`They become an owner of ${workspace.name}, like you, and you stay one. Owners can add and remove members, other owners too, and make more owners.`}
+          confirmLabel="Make owner"
+          pendingLabel="Saving..."
+          pending={busy}
+          error={promoteError}
+          onCancel={() => setPromoting(null)}
+          onConfirm={promote}
+        />
+      )}
     </div>
   )
 }

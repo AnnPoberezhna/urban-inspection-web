@@ -36,18 +36,15 @@ class AdminUserOut(BaseModel):
     inspections: int  # inspections the user uploaded
 
 
-class KeptWorkspace(BaseModel):
-    name: str
-    new_owner: str | None  # email of the member who takes over as owner; None if nobody needs to
-
-
 class UserDeletionPreview(BaseModel):
     """What deleting an account removes, and what stays with the other members."""
 
     deleted_workspaces: list[str]  # the personal workspace and team workspaces nobody else belongs to
     deleted_inspections: int  # every inspection in those workspaces
-    kept_workspaces: list[KeptWorkspace]  # team workspaces the user shares with others
+    kept_workspaces: list[str]  # team workspaces the user shares with others
     kept_inspections: int  # the user's uploads elsewhere; they stay, without an author
+    # Kept workspaces the user is the only owner of. The account can't be deleted while there are any.
+    sole_owner_of: list[str]
 
 
 class WorkspaceCreate(BaseModel):
@@ -63,6 +60,10 @@ class WorkspaceOut(BaseModel):
 
 class MemberAdd(BaseModel):
     email: EmailStr
+
+
+class MemberRoleUpdate(BaseModel):
+    role: WorkspaceRole
 
 
 class MemberOut(BaseModel):

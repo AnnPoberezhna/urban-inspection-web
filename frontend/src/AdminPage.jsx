@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { request } from './api.js'
+import ConfirmDialog from './ConfirmDialog.jsx'
 import { followLink } from './router.js'
 
 const NOTICE_MS = 6000
@@ -36,11 +37,8 @@ function DeletionImpact({ preview }) {
         <section>
           <p className="rail-label">Stays with the team</p>
           <ul>
-            {kept.map((workspace, index) => (
-              <li key={index}>
-                {workspace.name}
-                {workspace.new_owner && ` (${workspace.new_owner} becomes its owner)`}
-              </li>
+            {kept.map((name, index) => (
+              <li key={index}>{name}</li>
             ))}
             {kept_inspections > 0 && (
               <li>
@@ -57,17 +55,9 @@ function DeletionImpact({ preview }) {
 
 /** Shows what deleting the account removes, and asks for its email before deleting it. */
 function DeleteDialog({ user, pending, error, onCancel, onConfirm }) {
-  const dialogRef = useRef(null)
   const [preview, setPreview] = useState(null)
   const [previewError, setPreviewError] = useState('')
   const [typed, setTyped] = useState('')
-
-  // A layout effect, so close() runs while the dialog is still in the page and focus goes back to where it was.
-  useLayoutEffect(() => {
-    const dialog = dialogRef.current
-    dialog.showModal()
-    return () => dialog.close()
-  }, [])
 
   useEffect(() => {
     let active = true
@@ -79,75 +69,56 @@ function DeleteDialog({ user, pending, error, onCancel, onConfirm }) {
     }
   }, [user.id])
 
-  const ready = preview != null && typed.trim().toLowerCase() === user.email && !pending
-
-  function cancel() {
-    if (!pending) onCancel()
-  }
-
-  function handleSubmit(event) {
-    event.preventDefault()
-    if (ready) onConfirm()
-  }
+  // The only owner of a workspace other people use has to hand it over first; the admin can't pick an owner.
+  const soleOwnerOf = preview?.sole_owner_of ?? []
+  const blocked = soleOwnerOf.length > 0
 
   return (
-    <dialog
-      ref={dialogRef}
-      className="delete-dialog"
-      aria-labelledby="delete-dialog-title"
-      aria-describedby="delete-dialog-note"
-      onCancel={(event) => {
-        // Escape: let React unmount the dialog instead of the browser closing it.
-        event.preventDefault()
-        cancel()
-      }}
-      onClick={(event) => {
-        // The form fills the dialog, so a click on the dialog itself is a click on the backdrop.
-        if (event.target === event.currentTarget) cancel()
-      }}
+    <ConfirmDialog
+      label="Delete account"
+      title={user.email}
+      description="This can't be undone. They are logged out at once and can't log in again."
+      confirmLabel="Delete account"
+      pendingLabel="Deleting..."
+      canConfirm={preview != null && !blocked && typed.trim().toLowerCase() === user.email}
+      pending={pending}
+      error={error}
+      onCancel={onCancel}
+      onConfirm={onConfirm}
     >
-      <form className="delete-form" onSubmit={handleSubmit}>
-        <header className="delete-head">
-          <p className="rail-label">Delete account</p>
-          <h2 id="delete-dialog-title" className="delete-email">
-            {user.email}
-          </h2>
-        </header>
-        <p id="delete-dialog-note" className="delete-note">
-          This can't be undone. They are logged out at once and can't log in again.
-        </p>
+      {previewError && <p className="ticker is-error">{previewError}</p>}
+      {preview == null && !previewError && <p className="modal-note">Checking what will be deleted…</p>}
 
-        {previewError && <p className="ticker is-error">{previewError}</p>}
-        {preview == null && !previewError && <p className="delete-note">Checking what will be deleted…</p>}
-        {preview && <DeletionImpact preview={preview} />}
-
-        {/* The first field in the dialog, so it gets the focus when the dialog opens. */}
-        <label className="delete-confirm">
-          <span className="rail-label">
-            Type <b>{user.email}</b> to confirm
-          </span>
-          <input
-            type="text"
-            value={typed}
-            onChange={(event) => setTyped(event.currentTarget.value)}
-            disabled={pending}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </label>
-
-        {error && <p className="ticker is-error">{error}</p>}
-
-        <div className="actions">
-          <button type="button" className="btn btn-ghost" disabled={pending} onClick={cancel}>
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-danger is-solid" disabled={!ready}>
-            {pending ? 'Deleting...' : 'Delete account'}
-          </button>
+      {blocked ? (
+        <div className="delete-impact" role="alert">
+          <p className="rail-label is-alert">Can't be deleted yet</p>
+          <p className="modal-note">
+            They are the only owner of {soleOwnerOf.join(', ')}, which other people use. A workspace always needs an
+            owner, so they first have to make another member an owner: History → the workspace → Members → Make
+            owner. Then try again.
+          </p>
         </div>
-      </form>
-    </dialog>
+      ) : (
+        <>
+          {preview && <DeletionImpact preview={preview} />}
+
+          {/* The first field in the dialog, so it gets the focus when the dialog opens. */}
+          <label className="delete-confirm">
+            <span className="rail-label">
+              Type <b>{user.email}</b> to confirm
+            </span>
+            <input
+              type="text"
+              value={typed}
+              onChange={(event) => setTyped(event.currentTarget.value)}
+              disabled={pending}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </label>
+        </>
+      )}
+    </ConfirmDialog>
   )
 }
 
