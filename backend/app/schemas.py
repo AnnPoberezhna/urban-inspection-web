@@ -32,9 +32,22 @@ class AdminUserOut(BaseModel):
     created_at: datetime
     last_login_at: datetime | None
     is_admin: bool
-    blocked_at: datetime | None
     workspaces: int  # workspaces the user is a member of, including the personal one
     inspections: int  # inspections the user uploaded
+
+
+class KeptWorkspace(BaseModel):
+    name: str
+    new_owner: str | None  # email of the member who takes over as owner; None if nobody needs to
+
+
+class UserDeletionPreview(BaseModel):
+    """What deleting an account removes, and what stays with the other members."""
+
+    deleted_workspaces: list[str]  # the personal workspace and team workspaces nobody else belongs to
+    deleted_inspections: int  # every inspection in those workspaces
+    kept_workspaces: list[KeptWorkspace]  # team workspaces the user shares with others
+    kept_inspections: int  # the user's uploads elsewhere; they stay, without an author
 
 
 class WorkspaceCreate(BaseModel):
@@ -83,7 +96,7 @@ class InspectionSummary(BaseModel):
     site_id: int
     site_name: str
     workspace_id: int
-    created_by: str  # email
+    created_by: str | None  # email; None once the uploader's account is deleted
     inspection_date: date
     status: InspectionStatus
 

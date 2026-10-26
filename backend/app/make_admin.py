@@ -34,10 +34,6 @@ def main(argv: list[str] | None = None) -> int:
         else:
             user.is_admin = True
             message = f"{email} is now an admin."
-            # A blocked admin couldn't log in to unblock themselves.
-            if user.blocked_at is not None:
-                user.blocked_at = None
-                message += " The account was blocked and has been unblocked."
         db.commit()
 
     print(message)

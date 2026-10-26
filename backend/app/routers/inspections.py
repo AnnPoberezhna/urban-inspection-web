@@ -73,7 +73,7 @@ def _summary(inspection: Inspection) -> InspectionSummary:
         site_id=inspection.site_id,
         site_name=inspection.site.name,
         workspace_id=inspection.site.workspace_id,
-        created_by=inspection.created_by.email,
+        created_by=inspection.created_by.email if inspection.created_by else None,
         inspection_date=inspection.inspection_date,
         status=inspection.status,
     )

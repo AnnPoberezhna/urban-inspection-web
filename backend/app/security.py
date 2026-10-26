@@ -19,8 +19,6 @@ DUMMY_HASH = password_hasher.hash("dummy-password")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
-BLOCKED_MESSAGE = "This account has been blocked. Contact an administrator."
-
 
 def hash_password(password: str) -> str:
     return password_hasher.hash(password)
@@ -44,10 +42,9 @@ def create_access_token(user_id: int) -> str:
 def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)], db: Session = Depends(get_db)
 ) -> User:
-    # The frontend shows this message on its login page after logging the user out.
     credentials_error = HTTPException(
         status.HTTP_401_UNAUTHORIZED,
-        "Your session has expired. Please log in again.",
+        "Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
@@ -62,13 +59,9 @@ def get_current_user(
         raise credentials_error
 
     user = db.get(User, user_id)
+    # Also ends the open sessions of a deleted account.
     if user is None:
         raise credentials_error
-    if user.blocked_at is not None:
-        # Checked on every request, so blocking also ends sessions that are already open.
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED, BLOCKED_MESSAGE, headers={"WWW-Authenticate": "Bearer"}
-        )
     return user
 
 

@@ -32,8 +32,6 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Granted only with `python -m app.make_admin`, never through the API.
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
-    # Set by an admin. A blocked user can't log in, and their tokens stop working.
-    blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Workspace(Base):
@@ -42,10 +40,13 @@ class Workspace(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
     is_personal: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # None once the creator's account is deleted; their team workspaces stay with the other members.
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    created_by: Mapped[User] = relationship()
+    created_by: Mapped[User | None] = relationship()
     members: Mapped[list["WorkspaceMember"]] = relationship(
         back_populates="workspace", cascade="all, delete-orphan"
     )
@@ -88,10 +89,13 @@ class Site(Base):
     name: Mapped[str] = mapped_column(String(255))
     location: Mapped[WKBElement | None] = mapped_column(Geography("POINT", srid=4326))
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
-    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # None once the creator's account is deleted.
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
 
     workspace: Mapped[Workspace] = relationship(back_populates="sites")
-    created_by: Mapped[User] = relationship()
+    created_by: Mapped[User | None] = relationship()
     inspections: Mapped[list["Inspection"]] = relationship(
         back_populates="site", cascade="all, delete-orphan"
     )
@@ -109,7 +113,10 @@ class Inspection(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"), index=True)
-    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # None once the uploader's account is deleted.
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
     inspection_date: Mapped[date] = mapped_column(Date)
     status: Mapped[InspectionStatus] = mapped_column(
         Enum(InspectionStatus, name="inspection_status", native_enum=False),
@@ -118,7 +125,7 @@ class Inspection(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     site: Mapped[Site] = relationship(back_populates="inspections")
-    created_by: Mapped[User] = relationship()
+    created_by: Mapped[User | None] = relationship()
     images: Mapped[list["Image"]] = relationship(
         back_populates="inspection", cascade="all, delete-orphan"
     )
